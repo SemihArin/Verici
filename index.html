@@ -255,6 +255,29 @@
   .update-banner.show{display:flex}
   .update-banner button{background:#1a1205;color:var(--live);border:none;border-radius:8px;padding:6px 13px;font-weight:700;cursor:pointer}
   .hidden-audio{position:absolute;width:0;height:0;opacity:0;pointer-events:none}
+  .chatbtn-wrap{position:relative;display:inline-flex;flex:none}
+  .chat-dot{position:absolute;top:-2px;right:-2px;width:9px;height:9px;border-radius:50%;background:var(--live);border:2px solid var(--ink);display:none}
+  .chat-dot.show{display:block}
+  .chat-backdrop{position:fixed;inset:0;z-index:44;background:rgba(0,0,0,.45);opacity:0;pointer-events:none;transition:opacity .25s}
+  .chat-backdrop.open{opacity:1;pointer-events:auto}
+  .chat-drawer{position:fixed;left:0;right:0;bottom:0;z-index:45;background:var(--ink-2);border-top:1px solid var(--line);border-radius:18px 18px 0 0;
+    display:flex;flex-direction:column;height:72dvh;max-height:600px;transform:translateY(101%);transition:transform .25s ease;box-shadow:0 -12px 40px -10px rgba(0,0,0,.6)}
+  .chat-drawer.open{transform:translateY(0)}
+  .chat-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line-soft);flex:none}
+  .chat-head .title{font-weight:500;font-size:16px}
+  .chat-head-actions{display:flex;align-items:center;gap:4px}
+  .chat-list{flex:1;min-height:0;overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+  .chat-msg{max-width:85%;align-self:flex-start;display:flex;flex-direction:column}
+  .chat-msg.me{align-self:flex-end;align-items:flex-end}
+  .chat-name{font-size:12px;color:var(--muted);margin-bottom:3px;font-weight:500}
+  .chat-bubble{display:inline-block;background:var(--surface);border:1px solid var(--line-soft);border-radius:12px;padding:9px 12px;font-size:14px;line-height:1.4;color:var(--text);word-break:break-word}
+  .chat-msg.me .chat-bubble{background:var(--live-soft);border-color:rgba(255,159,28,.3)}
+  .chat-empty{margin:auto;color:var(--muted-2);font-size:14px;text-align:center}
+  .chat-input-row{display:flex;gap:8px;padding:12px 14px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--line-soft);flex:none}
+  .chat-input{flex:1;min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:11px 16px;color:var(--text);font-family:var(--sans);font-size:14px;outline:none}
+  .chat-input:focus{border-color:var(--live)}
+  .chat-send{flex:none;width:44px;height:44px;border-radius:50%;border:none;background:var(--live);color:#1a1205;cursor:pointer;display:flex;align-items:center;justify-content:center}
+  .chat-send svg{width:20px;height:20px}
   :focus-visible{outline:2px solid var(--live);outline-offset:2px;border-radius:6px}
   @media (max-width:520px){.panel-body{padding:16px 14px}}
   @media (prefers-reduced-motion:reduce){*{animation:none !important;transition:none !important}}
@@ -490,6 +513,7 @@
         <span class="pill pill--live">Canlı</span>
         <span class="readout time" id="elapsed">00:00:00</span>
         <button class="ctl" id="bcMicBtn" style="display:none" aria-label="Mikrofon"></button>
+        <span class="chatbtn-wrap"><button class="ctl" id="bcChatBtn" aria-label="Sohbet"></button><span class="chat-dot" id="bcChatDot"></span></span>
       </div>
       <button class="btn btn--danger" id="stopBtn">Durdur</button>
     </div>
@@ -523,6 +547,7 @@
         <button class="iconbtn" data-go="#/panel" aria-label="Panele dön" data-ic-back></button>
         <span class="pill pill--connecting" id="vStatus">Bağlanıyor…</span>
         <button class="ctl" id="vwMicBtn" style="display:none" aria-label="Mikrofon"></button>
+        <span class="chatbtn-wrap"><button class="ctl" id="vwChatBtn" aria-label="Sohbet"></button><span class="chat-dot" id="vwChatDot"></span></span>
       </div>
       <button class="btn btn--ghost" id="leaveBtn">Ayrıl</button>
     </div>
@@ -570,9 +595,24 @@
 <div class="splash" id="splash"><span class="glyph" data-glyph></span></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <audio id="voiceSink" class="hidden-audio" autoplay></audio>
+<div class="chat-backdrop" id="chatBackdrop"></div>
+<div class="chat-drawer" id="chatDrawer">
+  <div class="chat-head">
+    <span class="title">Sohbet</span>
+    <div class="chat-head-actions">
+      <button class="iconbtn" id="chatPipBtn" aria-label="Ayrı pencere" style="display:none"></button>
+      <button class="iconbtn" id="chatCloseBtn" aria-label="Kapat"></button>
+    </div>
+  </div>
+  <div class="chat-list" id="chatList"></div>
+  <div class="chat-input-row">
+    <input class="chat-input" id="chatInput" placeholder="Mesaj yaz…" maxlength="500" autocomplete="off">
+    <button class="chat-send" id="chatSendBtn" aria-label="Gönder"></button>
+  </div>
+</div>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getDatabase, ref, set, update, get, push, remove, onValue, onChildAdded, onChildRemoved, onDisconnect, serverTimestamp }
+import { getDatabase, ref, set, update, get, push, remove, onValue, onChildAdded, onChildRemoved, onDisconnect, serverTimestamp, query, limitToLast }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword,
   signInWithPopup, GoogleAuthProvider, OAuthProvider, sendPasswordResetEmail, signOut, updateProfile }
@@ -592,7 +632,7 @@ const firebaseConfig = {
 const BASE_ICE = [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] }];
 /* ═════════════════════════════════════════════════ */
 
-const APP_VERSION = "1.1.0";
+const APP_VERSION = "1.2.0";
 const el = (id) => document.getElementById(id);
 function esc(s){ return String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c])); }
 
@@ -617,6 +657,10 @@ const SVGS = {
   full: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H3v5"/><path d="M21 8V3h-5"/><path d="M16 21h5v-5"/><path d="M3 16v5h5"/></svg>`,
   exit: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h5V3"/><path d="M16 3v5h5"/><path d="M21 16h-5v5"/><path d="M8 21v-5H3"/></svg>`
 };
+SVGS.chat = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.5 9 9 0 0 1-3.8-.8L3 21l1.9-5.7A8.4 8.4 0 0 1 4 11.5 8.5 8.5 0 0 1 12.5 3 8.4 8.4 0 0 1 21 11.5z"/></svg>`;
+SVGS.send = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg>`;
+SVGS.pip = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><rect x="12" y="11" width="7" height="5" rx="1" fill="currentColor" stroke="none"/></svg>`;
+SVGS.close = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12"/><path d="M18 6 6 18"/></svg>`;
 function paintIcons(){
   document.querySelectorAll("[data-glyph]").forEach(n => n.innerHTML = BRAND_SVG);
   document.querySelectorAll("[data-google]").forEach(n => n.innerHTML = SVGS.google);
@@ -642,6 +686,8 @@ let currentRoom = null, myViewerRef = null, myViewerId = null;
 let viewerUnsubs = [], viewerActive = false, viewerMuted = true;
 let historyUnsub = null, broadcasts = [];
 let roomsUnsub = null, myRooms = [], currentRoomDetail = null;
+let chatUnsub = null, chatMsgs = [], chatRoom = null, chatOpen = false, chatUnread = false;
+let pipWindow = null, pipList = null;
 
 function configMissing(){ const c = firebaseConfig; return !c.apiKey || /YOUR_/.test(c.apiKey) || !c.databaseURL || /YOUR_/.test(c.databaseURL); }
 if (configMissing()) { el("setup").hidden = false; el("splash").classList.add("hide"); }
@@ -877,6 +923,89 @@ function bufferInit(pc){ pc._remoteReady = false; pc._pending = []; }
 async function addRemoteIce(pc, cand){ if (!cand) return; if (pc._remoteReady) { try { await pc.addIceCandidate(cand); } catch (e) { console.warn(e); } } else pc._pending.push(cand); }
 async function flushIce(pc){ pc._remoteReady = true; for (const c of pc._pending) { try { await pc.addIceCandidate(c); } catch (e) { console.warn(e); } } pc._pending = []; }
 
+/* ════════════ SOHBET ════════════ */
+const PIP_CSS = `body{margin:0;background:#0B0E14;color:#E8EDF6;font-family:'Space Grotesk',system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+.pip-root{display:flex;flex-direction:column;height:100vh}
+.pip-head{padding:11px 14px;border-bottom:1px solid #1F2840;font-weight:600;font-size:13px;color:#FF9F1C;letter-spacing:.04em;flex:none}
+.pip-list{flex:1;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:9px}
+.pip-msg{max-width:88%;align-self:flex-start;display:flex;flex-direction:column}
+.pip-msg.me{align-self:flex-end;align-items:flex-end}
+.pip-name{font-size:11px;color:#8A95AC;margin-bottom:2px}
+.pip-bubble{display:inline-block;background:#141A28;border:1px solid #1F2840;border-radius:11px;padding:7px 11px;font-size:13px;line-height:1.4;word-break:break-word}
+.pip-msg.me .pip-bubble{background:rgba(255,159,28,.14);border-color:rgba(255,159,28,.3)}
+.pip-empty{margin:auto;color:#5E6981;font-size:13px;text-align:center}`;
+
+function chatMsgEl(m){
+  const me = currentUser && m.uid === currentUser.uid;
+  const w = document.createElement("div"); w.className = "chat-msg" + (me ? " me" : "");
+  w.innerHTML = (me ? "" : '<div class="chat-name">' + esc(m.name || "Biri") + '</div>') + '<div class="chat-bubble">' + esc(m.text || "") + '</div>';
+  return w;
+}
+function pipMsgEl(doc, m){
+  const me = currentUser && m.uid === currentUser.uid;
+  const w = doc.createElement("div"); w.className = "pip-msg" + (me ? " me" : "");
+  w.innerHTML = (me ? "" : '<div class="pip-name">' + esc(m.name || "Biri") + '</div>') + '<div class="pip-bubble">' + esc(m.text || "") + '</div>';
+  return w;
+}
+function renderChat(){
+  const list = el("chatList"); if (!list) return;
+  list.innerHTML = "";
+  if (!chatMsgs.length) list.innerHTML = '<div class="chat-empty">Henüz mesaj yok.</div>';
+  else chatMsgs.forEach(m => list.appendChild(chatMsgEl(m)));
+  list.scrollTop = list.scrollHeight;
+  if (pipWindow && pipList) { pipList.innerHTML = chatMsgs.length ? "" : '<div class="pip-empty">Henüz mesaj yok.</div>'; chatMsgs.forEach(m => pipList.appendChild(pipMsgEl(pipWindow.document, m))); pipList.scrollTop = pipList.scrollHeight; }
+}
+function appendChatMsg(m){
+  const list = el("chatList");
+  if (list) { const e = list.querySelector(".chat-empty"); if (e) e.remove(); const atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 60; list.appendChild(chatMsgEl(m)); if (atBottom || chatOpen) list.scrollTop = list.scrollHeight; }
+  if (pipWindow && pipList) { const pe = pipList.querySelector(".pip-empty"); if (pe) pe.remove(); pipList.appendChild(pipMsgEl(pipWindow.document, m)); pipList.scrollTop = pipList.scrollHeight; }
+}
+function attachChat(code){
+  detachChat();
+  chatRoom = code; chatMsgs = []; renderChat();
+  chatUnsub = onChildAdded(query(ref(db, "rooms/" + code + "/chat"), limitToLast(60)), (snap) => {
+    const m = snap.val(); if (!m) return;
+    chatMsgs.push(m); if (chatMsgs.length > 300) chatMsgs.shift();
+    appendChatMsg(m);
+    if (!chatOpen) { chatUnread = true; updateChatDots(); }
+  }, () => {});
+}
+function detachChat(){ if (chatUnsub) { try { chatUnsub(); } catch {} chatUnsub = null; } closeChatPip(); chatRoom = null; chatMsgs = []; chatUnread = false; updateChatDots(); renderChat(); }
+async function sendChat(){
+  const inp = el("chatInput"); const text = (inp.value || "").trim();
+  if (!text || !chatRoom || !currentUser) return;
+  inp.value = "";
+  const name = currentUser.displayName || (currentUser.email ? currentUser.email.split("@")[0] : "Kullanıcı");
+  try { await push(ref(db, "rooms/" + chatRoom + "/chat"), { uid: currentUser.uid, name, text, ts: serverTimestamp() }); } catch { toast("Mesaj gönderilemedi"); }
+}
+function openChat(){
+  if (!chatRoom) return toast("Sohbet yalnızca yayın sırasında açık.");
+  chatOpen = true; chatUnread = false; updateChatDots();
+  el("chatDrawer").classList.add("open"); el("chatBackdrop").classList.add("open");
+  const l = el("chatList"); if (l) l.scrollTop = l.scrollHeight;
+  setTimeout(() => { const i = el("chatInput"); if (i) i.focus(); }, 220);
+}
+function closeChat(){ chatOpen = false; el("chatDrawer").classList.remove("open"); el("chatBackdrop").classList.remove("open"); }
+function updateChatDots(){ ["bcChatDot", "vwChatDot"].forEach(id => { const d = el(id); if (d) d.classList.toggle("show", chatUnread); }); }
+async function openChatPip(){
+  if (!("documentPictureInPicture" in window)) return toast("Bu tarayıcı ayrı pencereyi desteklemiyor.");
+  if (pipWindow) { try { pipWindow.focus(); } catch {} return; }
+  try { pipWindow = await window.documentPictureInPicture.requestWindow({ width: 320, height: 420 }); }
+  catch { toast("Pencere açılamadı."); return; }
+  const doc = pipWindow.document;
+  const fl = doc.createElement("link"); fl.rel = "stylesheet"; fl.href = "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap"; doc.head.appendChild(fl);
+  const st = doc.createElement("style"); st.textContent = PIP_CSS; doc.head.appendChild(st);
+  const root = doc.createElement("div"); root.className = "pip-root";
+  root.innerHTML = '<div class="pip-head">Verici · Sohbet</div><div class="pip-list" id="pipList"></div>';
+  doc.body.appendChild(root);
+  pipList = doc.getElementById("pipList");
+  if (!chatMsgs.length) pipList.innerHTML = '<div class="pip-empty">Henüz mesaj yok.</div>';
+  else chatMsgs.forEach(m => pipList.appendChild(pipMsgEl(doc, m)));
+  pipList.scrollTop = pipList.scrollHeight;
+  pipWindow.addEventListener("pagehide", () => { pipWindow = null; pipList = null; });
+}
+function closeChatPip(){ if (pipWindow) { try { pipWindow.close(); } catch {} } pipWindow = null; pipList = null; }
+
 /* ════════════ YAYINCI ════════════ */
 async function goLive(code){
   if (!firebaseReady || !currentUser) return;
@@ -908,6 +1037,7 @@ async function goLive(code){
   bcUnsubs.push(onChildRemoved(viewersRef, (s) => teardownViewer(s.key)));
   el("codeText").textContent = code;
   el("bcRoomName").textContent = meta.name || "Oda";
+  attachChat(code);
   setupMicBtn("bcMicBtn", !!micTrack, !!meta.voice);
   peakViewers = 0; bcStartedAt = Date.now(); updateViewerCount(); startTimer();
   isBroadcasting = true; go("#/yayin");
@@ -962,6 +1092,7 @@ function stopBroadcast(silent){
   localStream = null; micStream = null; micTrack = null; voiceStream = null; liveRoomMeta = null; roomCode = null;
   if (el("previewVideo")) el("previewVideo").srcObject = null;
   if (el("voiceSink")) el("voiceSink").srcObject = null;
+  detachChat(); closeChat();
   if (!silent) go("#/panel");
 }
 function startTimer(){ timerStart = Date.now(); el("elapsed").textContent = "00:00:00"; timerInt = setInterval(() => { el("elapsed").textContent = fmtTime(Math.floor((Date.now() - timerStart) / 1000)); }, 1000); }
@@ -1011,6 +1142,7 @@ async function doJoin(code){
   viewerUnsubs.push(onChildAdded(ref(db, base + "/hostCandidates"), (snap) => addRemoteIce(viewerPc, snap.val())));
   viewerUnsubs.push(onValue(ref(db, "rooms/" + code + "/meta/live"), (snap) => { if (snap.val() !== true) endedByHost(); }));
   setupMicBtn("vwMicBtn", !!viewerMicTrack, canTalk);
+  attachChat(code);
 }
 function endedByHost(){ cleanupViewer(false); setViewerStatus("ended"); showViewerOverlay("ended"); }
 function leaveRoom(){ cleanupViewer(true); go("#/panel"); }
@@ -1020,6 +1152,7 @@ function cleanupViewer(removeNode){
   if (viewerMicStream) { viewerMicStream.getTracks().forEach(t => { try { t.stop(); } catch {} }); viewerMicStream = null; viewerMicTrack = null; }
   if (removeNode && myViewerRef) { try { onDisconnect(myViewerRef).cancel(); } catch {} remove(myViewerRef).catch(() => {}); }
   myViewerRef = null; myViewerId = null; currentRoom = null; viewerActive = false; liveRoomMeta = null;
+  detachChat(); closeChat();
   if (el("remoteVideo")) el("remoteVideo").srcObject = null;
 }
 function setViewerStatus(state){
@@ -1163,6 +1296,20 @@ document.addEventListener("fullscreenchange", () => { const icon = document.full
 setupAutoHide(el("viewerStage"), el("viewerControls"));
 setupAutoHide(el("previewStage"), el("previewControls"));
 el("obNext").onclick = obNext;
+
+el("bcChatBtn").innerHTML = SVGS.chat;
+el("vwChatBtn").innerHTML = SVGS.chat;
+el("chatSendBtn").innerHTML = SVGS.send;
+el("chatCloseBtn").innerHTML = SVGS.close;
+el("chatPipBtn").innerHTML = SVGS.pip;
+if ("documentPictureInPicture" in window) el("chatPipBtn").style.display = "";
+el("bcChatBtn").onclick = openChat;
+el("vwChatBtn").onclick = openChat;
+el("chatCloseBtn").onclick = closeChat;
+el("chatBackdrop").onclick = closeChat;
+el("chatSendBtn").onclick = sendChat;
+el("chatPipBtn").onclick = openChatPip;
+el("chatInput").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); sendChat(); } });
 
 const roomParam = new URLSearchParams(location.search).get("room");
 if (roomParam) pendingRoom = roomParam;
