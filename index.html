@@ -258,10 +258,10 @@
   .chatbtn-wrap{position:relative;display:inline-flex;flex:none}
   .chat-dot{position:absolute;top:-2px;right:-2px;width:9px;height:9px;border-radius:50%;background:var(--live);border:2px solid var(--ink);display:none}
   .chat-dot.show{display:block}
-  .chat-backdrop{position:fixed;inset:0;z-index:44;background:rgba(0,0,0,.45);opacity:0;pointer-events:none;transition:opacity .25s}
+  .chat-backdrop{position:fixed;inset:0;z-index:44;background:transparent;opacity:0;pointer-events:none;transition:opacity .2s}
   .chat-backdrop.open{opacity:1;pointer-events:auto}
-  .chat-drawer{position:fixed;left:0;right:0;bottom:0;z-index:45;background:var(--ink-2);border-top:1px solid var(--line);border-radius:18px 18px 0 0;
-    display:flex;flex-direction:column;height:72dvh;max-height:600px;transform:translateY(101%);transition:transform .25s ease;box-shadow:0 -12px 40px -10px rgba(0,0,0,.6)}
+  .chat-drawer{position:fixed;left:0;right:0;bottom:0;z-index:45;background:rgba(13,17,28,.62);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-top:1px solid var(--line);border-radius:18px 18px 0 0;
+    display:flex;flex-direction:column;height:54dvh;max-height:500px;transform:translateY(101%);transition:transform .25s ease;box-shadow:0 -12px 40px -10px rgba(0,0,0,.5)}
   .chat-drawer.open{transform:translateY(0)}
   .chat-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line-soft);flex:none}
   .chat-head .title{font-weight:500;font-size:16px}
@@ -270,7 +270,7 @@
   .chat-msg{max-width:85%;align-self:flex-start;display:flex;flex-direction:column}
   .chat-msg.me{align-self:flex-end;align-items:flex-end}
   .chat-name{font-size:12px;color:var(--muted);margin-bottom:3px;font-weight:500}
-  .chat-bubble{display:inline-block;background:var(--surface);border:1px solid var(--line-soft);border-radius:12px;padding:9px 12px;font-size:14px;line-height:1.4;color:var(--text);word-break:break-word}
+  .chat-bubble{display:inline-block;background:rgba(22,29,44,.82);border:1px solid var(--line-soft);border-radius:12px;padding:9px 12px;font-size:14px;line-height:1.4;color:var(--text);word-break:break-word}
   .chat-msg.me .chat-bubble{background:var(--live-soft);border-color:rgba(255,159,28,.3)}
   .chat-empty{margin:auto;color:var(--muted-2);font-size:14px;text-align:center}
   .chat-input-row{display:flex;gap:8px;padding:12px 14px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--line-soft);flex:none}
@@ -632,7 +632,7 @@ const firebaseConfig = {
 const BASE_ICE = [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] }];
 /* ═════════════════════════════════════════════════ */
 
-const APP_VERSION = "1.2.0";
+const APP_VERSION = "1.2.1";
 const el = (id) => document.getElementById(id);
 function esc(s){ return String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c])); }
 
@@ -990,7 +990,7 @@ function updateChatDots(){ ["bcChatDot", "vwChatDot"].forEach(id => { const d = 
 async function openChatPip(){
   if (!("documentPictureInPicture" in window)) return toast("Bu tarayıcı ayrı pencereyi desteklemiyor.");
   if (pipWindow) { try { pipWindow.focus(); } catch {} return; }
-  try { pipWindow = await window.documentPictureInPicture.requestWindow({ width: 320, height: 420 }); }
+  try { pipWindow = await window.documentPictureInPicture.requestWindow({ width: 264, height: 320 }); }
   catch { toast("Pencere açılamadı."); return; }
   const doc = pipWindow.document;
   const fl = doc.createElement("link"); fl.rel = "stylesheet"; fl.href = "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap"; doc.head.appendChild(fl);
