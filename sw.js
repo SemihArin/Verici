@@ -1,5 +1,5 @@
 /* Verici service worker — çevrimdışı kabuk + güncelleme akışı */
-const VERSION = "v1.3.1";
+const VERSION = "v1.3.2";
 const CACHE = "verici-" + VERSION;
 
 // Uygulama kabuğu (aynı kaynak). Sürüm yükseltince eskiler temizlenir.
