@@ -632,7 +632,7 @@ const firebaseConfig = {
 const BASE_ICE = [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] }];
 /* ═════════════════════════════════════════════════ */
 
-const APP_VERSION = "1.3.1";
+const APP_VERSION = "1.3.2";
 const el = (id) => document.getElementById(id);
 function esc(s){ return String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c])); }
 
@@ -926,22 +926,44 @@ async function addRemoteIce(pc, cand){ if (!cand) return; if (pc._remoteReady) {
 async function flushIce(pc){ pc._remoteReady = true; for (const c of pc._pending) { try { await pc.addIceCandidate(c); } catch (e) { console.warn(e); } } pc._pending = []; }
 
 /* ════════════ SOHBET ════════════ */
-const PIP_CSS = `body{margin:0;background:#0B0E14;color:#E8EDF6;font-family:'Space Grotesk',system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+const PIP_CSS = `*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(120% 80% at 50% 0%,#121a2b 0%,#0B0E14 62%);color:#E8EDF6;font-family:'Space Grotesk',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;overflow:hidden}
 .pip-root{display:flex;flex-direction:column;height:100vh;cursor:text}
-.pip-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 12px;border-bottom:1px solid #1F2840;font-weight:600;font-size:13px;color:#FF9F1C;letter-spacing:.04em;flex:none}
-.pip-compose{background:none;border:none;color:#FF9F1C;cursor:pointer;padding:3px;border-radius:6px;display:inline-flex;opacity:.85}
+.pip-head{display:flex;align-items:center;gap:8px;padding:10px 12px;flex:none;background:linear-gradient(180deg,rgba(255,159,28,.12),transparent);border-bottom:1px solid rgba(255,159,28,.16);font-weight:600;font-size:13px;letter-spacing:.02em}
+.pip-live{width:8px;height:8px;border-radius:50%;background:#FF9F1C;flex:none;animation:pipPulse 1.8s ease-out infinite}
+.pip-title{color:#FFB84D;flex:1}
+.pip-compose{background:none;border:none;color:#FF9F1C;cursor:pointer;padding:4px;border-radius:7px;display:inline-flex;opacity:.8;transition:background .15s,opacity .15s,transform .1s}
 .pip-compose:hover{background:rgba(255,159,28,.16);opacity:1}
-.pip-list{flex:1;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:9px}
-.pip-msg{max-width:88%;align-self:flex-start;display:flex;flex-direction:column}
-.pip-msg.me{align-self:flex-end;align-items:flex-end}
-.pip-name{font-size:11px;color:#8A95AC;margin-bottom:2px}
-.pip-bubble{display:inline-block;background:#141A28;border:1px solid #1F2840;border-radius:11px;padding:7px 11px;font-size:13px;line-height:1.4;word-break:break-word}
-.pip-msg.me .pip-bubble{background:rgba(255,159,28,.14);border-color:rgba(255,159,28,.3)}
-.pip-empty{margin:auto;color:#5E6981;font-size:13px;text-align:center}
-.pip-input-row{flex:none;padding:8px 10px;border-top:1px solid #1F2840;background:#0E1320}
-.pip-input-row[hidden]{display:none}
-.pip-input{width:100%;box-sizing:border-box;background:#141A28;border:1px solid #28324A;border-radius:999px;padding:8px 13px;color:#E8EDF6;font-family:inherit;font-size:13px;outline:none}
-.pip-input:focus{border-color:#FF9F1C}`;
+.pip-compose:active{transform:scale(.9)}
+.pip-list{flex:1;overflow-y:auto;padding:10px 12px 6px;display:flex;flex-direction:column;gap:2px;scroll-behavior:smooth}
+.pip-list::-webkit-scrollbar{width:6px}
+.pip-list::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:99px}
+.pm{display:flex;align-items:flex-end;gap:7px;margin-top:9px;animation:pmIn .26s cubic-bezier(.2,.7,.3,1) both}
+.pm.grouped{margin-top:2px}
+.pm.me{justify-content:flex-end}
+.pm-av{width:24px;height:24px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff}
+.pm-av--ghost{background:transparent}
+.pm-col{display:flex;flex-direction:column;max-width:78%;min-width:0}
+.pm-name{font-size:11px;font-weight:600;margin:0 0 3px 2px;line-height:1}
+.pm-bubble{position:relative;background:#161d2c;border:1px solid #232c40;border-left:2px solid #232c40;border-radius:13px 13px 13px 4px;padding:7px 11px;font-size:13px;line-height:1.42;word-break:break-word;box-shadow:0 1px 2px rgba(0,0,0,.25)}
+.pm.me .pm-bubble{background:linear-gradient(135deg,#FFB020,#FF8A00);border:none;border-radius:13px 13px 4px 13px;color:#1a1205;font-weight:500;box-shadow:0 2px 8px rgba(255,140,0,.22)}
+.pm-time{display:inline-block;font-size:9px;opacity:.5;margin-left:8px;font-family:'Space Mono',ui-monospace,monospace}
+.pm.me .pm-time{opacity:.6;color:#2a1c00}
+.pip-empty{margin:auto;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;padding:20px;animation:pmIn .3s ease both}
+.pip-empty svg{opacity:.5}
+.pip-empty span{font-size:13px;color:#8A95AC;font-weight:500}
+.pip-empty small{font-size:11px;color:#5E6981}
+.pip-input-row{flex:none;display:flex;gap:7px;align-items:center;overflow:hidden;max-height:0;opacity:0;padding:0 10px;border-top:1px solid transparent;background:rgba(11,14,20,.6);transition:max-height .22s ease,opacity .18s ease,padding .22s ease,border-color .22s}
+.pip-input-row.show{max-height:60px;opacity:1;padding:8px 10px;border-top-color:#1F2840}
+.pip-input{flex:1;min-width:0;background:#141A28;border:1px solid #28324A;border-radius:999px;padding:8px 13px;color:#E8EDF6;font-family:inherit;font-size:13px;outline:none;transition:border-color .15s,box-shadow .15s}
+.pip-input:focus{border-color:#FF9F1C;box-shadow:0 0 0 3px rgba(255,159,28,.15)}
+.pip-send{flex:none;width:34px;height:34px;border-radius:50%;border:none;background:linear-gradient(135deg,#FFB020,#FF8A00);color:#1a1205;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform .12s,filter .15s}
+.pip-send:hover{filter:brightness(1.08)}
+.pip-send:active{transform:scale(.88)}
+.pip-send svg{width:17px;height:17px}
+@keyframes pmIn{from{opacity:0;transform:translateY(9px) scale(.97)}to{opacity:1;transform:none}}
+@keyframes pipPulse{0%{box-shadow:0 0 0 0 rgba(255,159,28,.5)}70%{box-shadow:0 0 0 7px rgba(255,159,28,0)}100%{box-shadow:0 0 0 0 rgba(255,159,28,0)}}
+@media (prefers-reduced-motion:reduce){.pm,.pip-empty{animation:none}.pip-live{animation:none}.pip-list{scroll-behavior:auto}}`;
 
 function chatMsgEl(m){
   const me = currentUser && m.uid === currentUser.uid;
@@ -949,10 +971,24 @@ function chatMsgEl(m){
   w.innerHTML = (me ? "" : '<div class="chat-name">' + esc(m.name || "Biri") + '</div>') + '<div class="chat-bubble">' + esc(m.text || "") + '</div>';
   return w;
 }
-function pipMsgEl(doc, m){
+function hueFromStr(s){ s = s || "x"; let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h % 360; }
+function fmtClock(ts){ try { return new Date(ts).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }); } catch { return ""; } }
+function initialsOf(name){ name = (name || "?").trim(); const p = name.split(/\s+/); return ((p[0] || "?")[0] + (p[1] ? p[1][0] : "")).toUpperCase(); }
+function pipEmptyHTML(){ return '<div class="pip-empty"><svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="#FF9F1C" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.5 9 9 0 0 1-3.8-.8L3 21l1.9-5.7A8.4 8.4 0 0 1 4 11.5 8.5 8.5 0 0 1 12.5 3 8.4 8.4 0 0 1 21 11.5z"/></svg><span>Sohbet başlasın</span><small>İlk mesajı sen yaz.</small></div>'; }
+function pipMsgEl(doc, m, prev){
   const me = currentUser && m.uid === currentUser.uid;
-  const w = doc.createElement("div"); w.className = "pip-msg" + (me ? " me" : "");
-  w.innerHTML = (me ? "" : '<div class="pip-name">' + esc(m.name || "Biri") + '</div>') + '<div class="pip-bubble">' + esc(m.text || "") + '</div>';
+  const grouped = !!(prev && prev.uid === m.uid && (!m.ts || !prev.ts || (m.ts - prev.ts) < 300000));
+  const hue = hueFromStr(m.uid || m.name);
+  const time = m.ts ? '<span class="pm-time">' + fmtClock(m.ts) + '</span>' : "";
+  const w = doc.createElement("div");
+  w.className = "pm " + (me ? "me" : "other") + (grouped ? " grouped" : "");
+  if (me) {
+    w.innerHTML = '<div class="pm-col"><div class="pm-bubble">' + esc(m.text || "") + time + '</div></div>';
+  } else {
+    const av = grouped ? '<div class="pm-av pm-av--ghost"></div>' : '<div class="pm-av" style="background:hsl(' + hue + ',52%,42%)">' + esc(initialsOf(m.name)) + '</div>';
+    const nm = grouped ? '' : '<div class="pm-name" style="color:hsl(' + hue + ',72%,70%)">' + esc(m.name || "Biri") + '</div>';
+    w.innerHTML = av + '<div class="pm-col">' + nm + '<div class="pm-bubble" style="border-left-color:hsl(' + hue + ',60%,55%)">' + esc(m.text || "") + time + '</div></div>';
+  }
   return w;
 }
 function renderChat(){
@@ -961,12 +997,12 @@ function renderChat(){
   if (!chatMsgs.length) list.innerHTML = '<div class="chat-empty">Henüz mesaj yok.</div>';
   else chatMsgs.forEach(m => list.appendChild(chatMsgEl(m)));
   list.scrollTop = list.scrollHeight;
-  if (pipWindow && pipList) { pipList.innerHTML = chatMsgs.length ? "" : '<div class="pip-empty">Henüz mesaj yok.</div>'; chatMsgs.forEach(m => pipList.appendChild(pipMsgEl(pipWindow.document, m))); pipList.scrollTop = pipList.scrollHeight; }
+  if (pipWindow && pipList) { pipList.innerHTML = chatMsgs.length ? "" : pipEmptyHTML(); chatMsgs.forEach((m, i) => pipList.appendChild(pipMsgEl(pipWindow.document, m, chatMsgs[i - 1]))); pipList.scrollTop = pipList.scrollHeight; }
 }
 function appendChatMsg(m){
   const list = el("chatList");
   if (list) { const e = list.querySelector(".chat-empty"); if (e) e.remove(); const atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 60; list.appendChild(chatMsgEl(m)); if (atBottom || chatOpen) list.scrollTop = list.scrollHeight; }
-  if (pipWindow && pipList) { const pe = pipList.querySelector(".pip-empty"); if (pe) pe.remove(); pipList.appendChild(pipMsgEl(pipWindow.document, m)); pipList.scrollTop = pipList.scrollHeight; }
+  if (pipWindow && pipList) { const pe = pipList.querySelector(".pip-empty"); if (pe) pe.remove(); pipList.appendChild(pipMsgEl(pipWindow.document, m, chatMsgs[chatMsgs.length - 2])); pipList.scrollTop = pipList.scrollHeight; }
 }
 function attachChat(code){
   detachChat();
@@ -998,27 +1034,31 @@ function updateChatDots(){ ["bcChatDot", "vwChatDot"].forEach(id => { const d = 
 async function openChatPip(){
   if (!("documentPictureInPicture" in window)) return toast("Bu tarayıcı ayrı pencereyi desteklemiyor.");
   if (pipWindow) { try { pipWindow.focus(); } catch {} return; }
-  try { pipWindow = await window.documentPictureInPicture.requestWindow({ width: 264, height: 320 }); }
+  try { pipWindow = await window.documentPictureInPicture.requestWindow({ width: 300, height: 384 }); }
   catch { toast("Pencere açılamadı."); return; }
   const doc = pipWindow.document;
-  const fl = doc.createElement("link"); fl.rel = "stylesheet"; fl.href = "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap"; doc.head.appendChild(fl);
+  const fl = doc.createElement("link"); fl.rel = "stylesheet"; fl.href = "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Space+Mono&display=swap"; doc.head.appendChild(fl);
   const st = doc.createElement("style"); st.textContent = PIP_CSS; doc.head.appendChild(st);
   const root = doc.createElement("div"); root.className = "pip-root";
-  root.innerHTML = '<div class="pip-head"><span>Verici · Sohbet</span><button class="pip-compose" id="pipCompose" title="Mesaj yaz" aria-label="Mesaj yaz"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button></div><div class="pip-list" id="pipList"></div><div class="pip-input-row" id="pipInputRow" hidden><input class="pip-input" id="pipInput" placeholder="Mesaj yaz…" maxlength="500" autocomplete="off"></div>';
+  root.innerHTML = '<div class="pip-head"><span class="pip-live"></span><span class="pip-title">Sohbet</span><button class="pip-compose" id="pipCompose" title="Mesaj yaz" aria-label="Mesaj yaz"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button></div><div class="pip-list" id="pipList"></div><div class="pip-input-row" id="pipInputRow"><input class="pip-input" id="pipInput" placeholder="Mesaj yaz…" maxlength="500" autocomplete="off"><button class="pip-send" id="pipSend" aria-label="Gönder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg></button></div>';
   doc.body.appendChild(root);
   pipList = doc.getElementById("pipList");
   const pipInputRow = doc.getElementById("pipInputRow");
   const pipInput = doc.getElementById("pipInput");
+  const pipSend = doc.getElementById("pipSend");
   let pipHideT = null;
-  const showPipInput = () => { clearTimeout(pipHideT); pipInputRow.hidden = false; try { pipInput.focus(); } catch {} };
+  const showPipInput = () => { clearTimeout(pipHideT); pipInputRow.classList.add("show"); try { pipInput.focus(); } catch {} };
+  const sendPip = async () => { const t = pipInput.value; pipInput.value = ""; await pushChatMessage(t); try { pipInput.focus(); } catch {} if (pipList) pipList.scrollTop = pipList.scrollHeight; };
   root.addEventListener("click", (e) => { if (e.target !== pipInput) showPipInput(); });
-  pipInput.addEventListener("blur", () => { pipHideT = setTimeout(() => { pipInputRow.hidden = true; }, 160); });
-  pipInput.addEventListener("keydown", async (e) => {
-    if (e.key === "Enter") { e.preventDefault(); const t = pipInput.value; pipInput.value = ""; await pushChatMessage(t); if (pipList) pipList.scrollTop = pipList.scrollHeight; }
+  pipInput.addEventListener("blur", () => { pipHideT = setTimeout(() => pipInputRow.classList.remove("show"), 160); });
+  pipInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); sendPip(); }
     else if (e.key === "Escape") { e.preventDefault(); pipInput.blur(); }
   });
-  if (!chatMsgs.length) pipList.innerHTML = '<div class="pip-empty">Henüz mesaj yok.</div>';
-  else chatMsgs.forEach(m => pipList.appendChild(pipMsgEl(doc, m)));
+  pipSend.addEventListener("mousedown", (e) => e.preventDefault());
+  pipSend.addEventListener("click", sendPip);
+  if (!chatMsgs.length) pipList.innerHTML = pipEmptyHTML();
+  else chatMsgs.forEach((m, i) => pipList.appendChild(pipMsgEl(doc, m, chatMsgs[i - 1])));
   pipList.scrollTop = pipList.scrollHeight;
   pipWindow.addEventListener("pagehide", () => { pipWindow = null; pipList = null; });
 }
