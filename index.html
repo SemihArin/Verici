@@ -632,7 +632,7 @@ const firebaseConfig = {
 const BASE_ICE = [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] }];
 /* ═════════════════════════════════════════════════ */
 
-const APP_VERSION = "1.2.1";
+const APP_VERSION = "1.3.1";
 const el = (id) => document.getElementById(id);
 function esc(s){ return String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c])); }
 
@@ -684,6 +684,8 @@ let timerInt = null, timerStart = 0;
 let viewerPc = null, viewerMicStream = null, viewerMicTrack = null;
 let currentRoom = null, myViewerRef = null, myViewerId = null;
 let viewerUnsubs = [], viewerActive = false, viewerMuted = true;
+let viewerConnectTimer = null, viewerDisconnectTimer = null, viewerReconnectAttempts = 0;
+const MAX_RECONNECT = 3;
 let historyUnsub = null, broadcasts = [];
 let roomsUnsub = null, myRooms = [], currentRoomDetail = null;
 let chatUnsub = null, chatMsgs = [], chatRoom = null, chatOpen = false, chatUnread = false;
@@ -925,15 +927,21 @@ async function flushIce(pc){ pc._remoteReady = true; for (const c of pc._pending
 
 /* ════════════ SOHBET ════════════ */
 const PIP_CSS = `body{margin:0;background:#0B0E14;color:#E8EDF6;font-family:'Space Grotesk',system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-.pip-root{display:flex;flex-direction:column;height:100vh}
-.pip-head{padding:11px 14px;border-bottom:1px solid #1F2840;font-weight:600;font-size:13px;color:#FF9F1C;letter-spacing:.04em;flex:none}
+.pip-root{display:flex;flex-direction:column;height:100vh;cursor:text}
+.pip-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 12px;border-bottom:1px solid #1F2840;font-weight:600;font-size:13px;color:#FF9F1C;letter-spacing:.04em;flex:none}
+.pip-compose{background:none;border:none;color:#FF9F1C;cursor:pointer;padding:3px;border-radius:6px;display:inline-flex;opacity:.85}
+.pip-compose:hover{background:rgba(255,159,28,.16);opacity:1}
 .pip-list{flex:1;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:9px}
 .pip-msg{max-width:88%;align-self:flex-start;display:flex;flex-direction:column}
 .pip-msg.me{align-self:flex-end;align-items:flex-end}
 .pip-name{font-size:11px;color:#8A95AC;margin-bottom:2px}
 .pip-bubble{display:inline-block;background:#141A28;border:1px solid #1F2840;border-radius:11px;padding:7px 11px;font-size:13px;line-height:1.4;word-break:break-word}
 .pip-msg.me .pip-bubble{background:rgba(255,159,28,.14);border-color:rgba(255,159,28,.3)}
-.pip-empty{margin:auto;color:#5E6981;font-size:13px;text-align:center}`;
+.pip-empty{margin:auto;color:#5E6981;font-size:13px;text-align:center}
+.pip-input-row{flex:none;padding:8px 10px;border-top:1px solid #1F2840;background:#0E1320}
+.pip-input-row[hidden]{display:none}
+.pip-input{width:100%;box-sizing:border-box;background:#141A28;border:1px solid #28324A;border-radius:999px;padding:8px 13px;color:#E8EDF6;font-family:inherit;font-size:13px;outline:none}
+.pip-input:focus{border-color:#FF9F1C}`;
 
 function chatMsgEl(m){
   const me = currentUser && m.uid === currentUser.uid;
@@ -971,13 +979,13 @@ function attachChat(code){
   }, () => {});
 }
 function detachChat(){ if (chatUnsub) { try { chatUnsub(); } catch {} chatUnsub = null; } closeChatPip(); chatRoom = null; chatMsgs = []; chatUnread = false; updateChatDots(); renderChat(); }
-async function sendChat(){
-  const inp = el("chatInput"); const text = (inp.value || "").trim();
+async function pushChatMessage(text){
+  text = (text || "").trim();
   if (!text || !chatRoom || !currentUser) return;
-  inp.value = "";
   const name = currentUser.displayName || (currentUser.email ? currentUser.email.split("@")[0] : "Kullanıcı");
   try { await push(ref(db, "rooms/" + chatRoom + "/chat"), { uid: currentUser.uid, name, text, ts: serverTimestamp() }); } catch { toast("Mesaj gönderilemedi"); }
 }
+async function sendChat(){ const inp = el("chatInput"); if (!inp) return; const t = inp.value; inp.value = ""; await pushChatMessage(t); }
 function openChat(){
   if (!chatRoom) return toast("Sohbet yalnızca yayın sırasında açık.");
   chatOpen = true; chatUnread = false; updateChatDots();
@@ -996,9 +1004,19 @@ async function openChatPip(){
   const fl = doc.createElement("link"); fl.rel = "stylesheet"; fl.href = "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap"; doc.head.appendChild(fl);
   const st = doc.createElement("style"); st.textContent = PIP_CSS; doc.head.appendChild(st);
   const root = doc.createElement("div"); root.className = "pip-root";
-  root.innerHTML = '<div class="pip-head">Verici · Sohbet</div><div class="pip-list" id="pipList"></div>';
+  root.innerHTML = '<div class="pip-head"><span>Verici · Sohbet</span><button class="pip-compose" id="pipCompose" title="Mesaj yaz" aria-label="Mesaj yaz"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button></div><div class="pip-list" id="pipList"></div><div class="pip-input-row" id="pipInputRow" hidden><input class="pip-input" id="pipInput" placeholder="Mesaj yaz…" maxlength="500" autocomplete="off"></div>';
   doc.body.appendChild(root);
   pipList = doc.getElementById("pipList");
+  const pipInputRow = doc.getElementById("pipInputRow");
+  const pipInput = doc.getElementById("pipInput");
+  let pipHideT = null;
+  const showPipInput = () => { clearTimeout(pipHideT); pipInputRow.hidden = false; try { pipInput.focus(); } catch {} };
+  root.addEventListener("click", (e) => { if (e.target !== pipInput) showPipInput(); });
+  pipInput.addEventListener("blur", () => { pipHideT = setTimeout(() => { pipInputRow.hidden = true; }, 160); });
+  pipInput.addEventListener("keydown", async (e) => {
+    if (e.key === "Enter") { e.preventDefault(); const t = pipInput.value; pipInput.value = ""; await pushChatMessage(t); if (pipList) pipList.scrollTop = pipList.scrollHeight; }
+    else if (e.key === "Escape") { e.preventDefault(); pipInput.blur(); }
+  });
   if (!chatMsgs.length) pipList.innerHTML = '<div class="pip-empty">Henüz mesaj yok.</div>';
   else chatMsgs.forEach(m => pipList.appendChild(pipMsgEl(doc, m)));
   pipList.scrollTop = pipList.scrollHeight;
@@ -1102,10 +1120,12 @@ function stopTimer(){ clearInterval(timerInt); timerInt = null; }
 function joinFromCode(code){
   code = (code || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
   if (!code) return toast("Kanal kodu gir.");
+  viewerReconnectAttempts = 0;
   pendingJoinCode = code; go("#/izle");
 }
 async function doJoin(code){
   if (!firebaseReady || !currentUser) return;
+  clearViewerTimers();
   viewerActive = true; setViewerStatus("connecting"); showViewerOverlay("connecting");
   let meta = null;
   try { const s = await get(ref(db, "rooms/" + code + "/meta")); meta = s.val(); }
@@ -1128,10 +1148,15 @@ async function doJoin(code){
   viewerPc.ontrack = (e) => { remoteStream.addTrack(e.track); const v = el("remoteVideo"); if (v.srcObject !== remoteStream) v.srcObject = remoteStream; v.play && v.play().catch(() => {}); };
   viewerPc.onicecandidate = (e) => { if (e.candidate) push(ref(db, base + "/viewerCandidates"), e.candidate.toJSON()); };
   viewerPc.onconnectionstatechange = () => {
+    if (!viewerPc) return;
     const st = viewerPc.connectionState;
-    if (st === "connected") { setViewerStatus("live"); hideViewerOverlay(); }
-    else if (st === "failed") { setViewerStatus("lost"); showViewerOverlay("lost"); }
-    else if (st === "disconnected") { setViewerStatus("connecting"); }
+    if (st === "connected") { clearViewerTimers(); viewerReconnectAttempts = 0; setViewerStatus("live"); hideViewerOverlay(); }
+    else if (st === "failed") { handleViewerDrop(); }
+    else if (st === "disconnected") {
+      setViewerStatus("connecting");
+      clearTimeout(viewerDisconnectTimer);
+      viewerDisconnectTimer = setTimeout(() => { if (viewerPc && viewerPc.connectionState !== "connected") handleViewerDrop(); }, 6000);
+    }
   };
   viewerUnsubs.push(onValue(ref(db, base + "/offer"), async (snap) => {
     const offer = snap.val();
@@ -1141,24 +1166,24 @@ async function doJoin(code){
   }));
   viewerUnsubs.push(onChildAdded(ref(db, base + "/hostCandidates"), (snap) => addRemoteIce(viewerPc, snap.val())));
   viewerUnsubs.push(onValue(ref(db, "rooms/" + code + "/meta/live"), (snap) => { if (snap.val() !== true) endedByHost(); }));
+  clearTimeout(viewerConnectTimer);
+  viewerConnectTimer = setTimeout(() => { if (viewerActive && viewerPc && viewerPc.connectionState !== "connected") showViewerOverlay("slow"); }, 15000);
   setupMicBtn("vwMicBtn", !!viewerMicTrack, canTalk);
   attachChat(code);
 }
 function endedByHost(){ cleanupViewer(false); setViewerStatus("ended"); showViewerOverlay("ended"); }
 function leaveRoom(){ cleanupViewer(true); go("#/panel"); }
 function cleanupViewer(removeNode){
-  viewerUnsubs.forEach(u => { try { u && u(); } catch {} }); viewerUnsubs = [];
-  if (viewerPc) { try { viewerPc.close(); } catch {} viewerPc = null; }
-  if (viewerMicStream) { viewerMicStream.getTracks().forEach(t => { try { t.stop(); } catch {} }); viewerMicStream = null; viewerMicTrack = null; }
-  if (removeNode && myViewerRef) { try { onDisconnect(myViewerRef).cancel(); } catch {} remove(myViewerRef).catch(() => {}); }
-  myViewerRef = null; myViewerId = null; currentRoom = null; viewerActive = false; liveRoomMeta = null;
+  teardownViewerConn(removeNode);
   detachChat(); closeChat();
+  currentRoom = null; viewerActive = false; liveRoomMeta = null;
   if (el("remoteVideo")) el("remoteVideo").srcObject = null;
 }
 function setViewerStatus(state){
   const p = el("vStatus"); p.className = "pill";
   if (state === "connecting") { p.classList.add("pill--connecting"); p.textContent = "Bağlanıyor…"; }
   else if (state === "live") { p.classList.add("pill--live"); p.textContent = "Canlı"; }
+  else if (state === "reconnecting") { p.classList.add("pill--connecting"); p.textContent = "Yeniden bağlanılıyor…"; }
   else if (state === "lost") { p.classList.add("pill--connecting"); p.textContent = "Bağlantı koptu"; }
   else p.textContent = "Sona erdi";
   el("vLivePill").style.display = state === "live" ? "" : "none";
@@ -1166,6 +1191,11 @@ function setViewerStatus(state){
 function showViewerOverlay(state){
   const ov = el("viewerOverlay"); ov.hidden = false;
   if (state === "connecting") ov.innerHTML = '<div class="overlay-inner"><div class="spinner"></div><p>Bağlanıyor…</p></div>';
+  else if (state === "reconnecting") ov.innerHTML = '<div class="overlay-inner"><div class="spinner"></div><p>Yeniden bağlanılıyor… (' + viewerReconnectAttempts + '/' + MAX_RECONNECT + ')</p></div>';
+  else if (state === "slow") {
+    ov.innerHTML = '<div class="overlay-inner"><span class="glyph glyph--lg">' + BRAND_SVG + '</span><h3>Bağlantı kurulamıyor</h3><p>Yayıncıyla aynı ağda değilsen, bağlantı için bir TURN sunucusu gerekebilir (Ayarlar).</p><div style="margin-top:18px"><button class="btn btn--soft" id="retryBtn">Yeniden dene</button></div></div>';
+    el("retryBtn").onclick = () => { const c = currentRoom; cleanupViewer(true); if (c) joinFromCode(c); };
+  }
   else if (state === "lost") {
     ov.innerHTML = '<div class="overlay-inner"><span class="glyph glyph--lg">' + BRAND_SVG + '</span><h3>Bağlantı koptu</h3><p>Yayıncıyla bağlantı kesildi.</p><div style="margin-top:18px"><button class="btn btn--soft" id="retryBtn">Yeniden dene</button></div></div>';
     el("retryBtn").onclick = () => { const c = currentRoom; cleanupViewer(true); if (c) joinFromCode(c); };
@@ -1176,6 +1206,25 @@ function showViewerOverlay(state){
 }
 function hideViewerOverlay(){ el("viewerOverlay").hidden = true; }
 
+function clearViewerTimers(){ clearTimeout(viewerConnectTimer); clearTimeout(viewerDisconnectTimer); viewerConnectTimer = null; viewerDisconnectTimer = null; }
+function teardownViewerConn(removeNode){
+  clearViewerTimers();
+  viewerUnsubs.forEach(u => { try { u && u(); } catch {} }); viewerUnsubs = [];
+  if (viewerPc) { try { viewerPc.close(); } catch {} viewerPc = null; }
+  if (viewerMicStream) { viewerMicStream.getTracks().forEach(t => { try { t.stop(); } catch {} }); viewerMicStream = null; viewerMicTrack = null; }
+  if (removeNode && myViewerRef) { try { onDisconnect(myViewerRef).cancel(); } catch {} remove(myViewerRef).catch(() => {}); }
+  myViewerRef = null; myViewerId = null;
+}
+function reconnectViewer(){ const c = currentRoom; if (!c || !viewerActive) return; teardownViewerConn(true); doJoin(c); }
+function handleViewerDrop(){
+  if (!viewerActive) return;
+  clearViewerTimers();
+  if (viewerReconnectAttempts < MAX_RECONNECT) {
+    viewerReconnectAttempts++;
+    setViewerStatus("reconnecting"); showViewerOverlay("reconnecting");
+    setTimeout(() => { if (viewerActive) reconnectViewer(); }, 1500);
+  } else { setViewerStatus("lost"); showViewerOverlay("lost"); }
+}
 function setupMicBtn(id, hasMic, voiceOn){
   const b = el(id); if (!b) return;
   b.style.display = voiceOn ? "" : "none";
