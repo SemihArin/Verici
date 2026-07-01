@@ -456,14 +456,42 @@
     <div class="page"><div class="page-inner">
       <div class="sec-title" style="margin-top:6px">Yayın</div>
       <div class="setting">
-        <label for="qualitySel">Yayın kalitesi</label>
-        <select class="tselect" id="qualitySel">
-          <option value="auto">Otomatik</option>
-          <option value="1080">Yüksek (1080p)</option>
-          <option value="720">Dengeli (720p)</option>
-          <option value="fps">Akıcı (60 fps)</option>
+        <label for="contentSel">İçerik türü</label>
+        <select class="tselect" id="contentSel">
+          <option value="balanced">Dengeli</option>
+          <option value="motion">Akıcılık (video, hareket)</option>
+          <option value="detail">Keskinlik (metin, kod)</option>
         </select>
-        <p class="hint">Ekran paylaşımı başlatılırken kullanılan çözünürlük/kare hızı tercihi.</p>
+        <p class="hint">Akıcılık kareleri, keskinlik çözünürlüğü önceler. Takılma yaşıyorsan önce "Akıcılık"ı dene.</p>
+      </div>
+      <div class="setting">
+        <div class="grid2">
+          <div><label for="bitrateSel">Bit hızı</label><select class="tselect" id="bitrateSel">
+            <option value="auto">Otomatik</option>
+            <option value="2">2 Mbps</option>
+            <option value="4">4 Mbps</option>
+            <option value="8">8 Mbps</option>
+            <option value="12">12 Mbps</option>
+            <option value="20">20 Mbps</option>
+          </select></div>
+          <div><label for="fpsSel">Kare hızı</label><select class="tselect" id="fpsSel">
+            <option value="auto">Otomatik</option>
+            <option value="60">60 fps</option>
+            <option value="30">30 fps</option>
+            <option value="15">15 fps</option>
+          </select></div>
+        </div>
+        <p class="hint">Bit hızını yükseltmek netliği/akıcılığı artırır (daha çok bant genişliği kullanır). Yüksek çözünürlükte 8–12 Mbps önerilir. Yayın sırasında değiştirip kaydedersen anında uygulanır.</p>
+      </div>
+      <div class="setting">
+        <label for="resSel">Çözünürlük</label>
+        <select class="tselect" id="resSel">
+          <option value="auto">Otomatik (ekran çözünürlüğü)</option>
+          <option value="1080">1080p</option>
+          <option value="720">720p</option>
+          <option value="480">480p</option>
+        </select>
+        <p class="hint">Düşük çözünürlük CPU ve bant genişliğini rahatlatır. Çözünürlük değişikliği yeni yayında geçerli olur.</p>
       </div>
       <div class="sec-title">TURN sunucusu (opsiyonel)</div>
       <div class="setting">
@@ -632,7 +660,7 @@ const firebaseConfig = {
 const BASE_ICE = [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] }];
 /* ═════════════════════════════════════════════════ */
 
-const APP_VERSION = "1.3.2";
+const APP_VERSION = "1.4.0";
 const el = (id) => document.getElementById(id);
 function esc(s){ return String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c])); }
 
@@ -712,12 +740,34 @@ function getIceServers(){
     if (url) { const e = { urls: url }; const u = localStorage.getItem("verici_turn_user"); const c = localStorage.getItem("verici_turn_cred"); if (u) e.username = u; if (c) e.credential = c; ice.push(e); } } catch {}
   return ice;
 }
+function qGet(k, d){ try { return localStorage.getItem(k) || d; } catch { return d; } }
+function contentSettings(){
+  const c = qGet("verici_content", "balanced");
+  if (c === "motion") return { hint: "motion", degrade: "maintain-framerate" };
+  if (c === "detail") return { hint: "text", degrade: "maintain-resolution" };
+  return { hint: "detail", degrade: "balanced" };
+}
 function displayConstraints(){
-  let q = "auto"; try { q = localStorage.getItem("verici_quality") || "auto"; } catch {}
-  if (q === "1080") return { video: { width:{ideal:1920}, height:{ideal:1080}, frameRate:{ideal:30} }, audio: true };
-  if (q === "720")  return { video: { width:{ideal:1280}, height:{ideal:720}, frameRate:{ideal:30} }, audio: true };
-  if (q === "fps")  return { video: { frameRate:{ideal:60} }, audio: true };
-  return { video: { frameRate:{ideal:30} }, audio: true };
+  const res = qGet("verici_res", "auto"), fps = qGet("verici_fps", "auto");
+  const video = {};
+  if (res === "1080") { video.width = { ideal: 1920 }; video.height = { ideal: 1080 }; }
+  else if (res === "720") { video.width = { ideal: 1280 }; video.height = { ideal: 720 }; }
+  else if (res === "480") { video.width = { ideal: 854 }; video.height = { ideal: 480 }; }
+  video.frameRate = { ideal: fps === "auto" ? 30 : parseInt(fps, 10) };
+  return { video, audio: true };
+}
+async function applySenderParams(pc){
+  try {
+    const sender = pc.getSenders().find(s => s.track && s.track.kind === "video");
+    if (!sender) return;
+    const params = sender.getParameters();
+    if (!params.encodings || !params.encodings.length) params.encodings = [{}];
+    const br = qGet("verici_bitrate", "8"), fps = qGet("verici_fps", "auto");
+    if (br === "auto") delete params.encodings[0].maxBitrate; else params.encodings[0].maxBitrate = parseInt(br, 10) * 1000000;
+    if (fps === "auto") delete params.encodings[0].maxFramerate; else params.encodings[0].maxFramerate = parseInt(fps, 10);
+    params.degradationPreference = contentSettings().degrade;
+    await sender.setParameters(params);
+  } catch (e) { console.warn("setParameters", e); }
 }
 function getMic(){ return navigator.mediaDevices.getUserMedia({ audio: { echoCancellation:true, noiseSuppression:true, autoGainControl:true } }); }
 
@@ -905,7 +955,10 @@ function renderHistory(){
 /* ──────── AYARLAR ──────── */
 function loadSettings(){
   try {
-    el("qualitySel").value = localStorage.getItem("verici_quality") || "auto";
+    el("contentSel").value = localStorage.getItem("verici_content") || "balanced";
+    el("bitrateSel").value = localStorage.getItem("verici_bitrate") || "8";
+    el("fpsSel").value = localStorage.getItem("verici_fps") || "auto";
+    el("resSel").value = localStorage.getItem("verici_res") || "auto";
     el("turnUrl").value = localStorage.getItem("verici_turn_url") || "";
     el("turnUser").value = localStorage.getItem("verici_turn_user") || "";
     el("turnCred").value = localStorage.getItem("verici_turn_cred") || "";
@@ -913,11 +966,18 @@ function loadSettings(){
 }
 function saveSettings(){
   try {
-    localStorage.setItem("verici_quality", el("qualitySel").value);
+    localStorage.setItem("verici_content", el("contentSel").value);
+    localStorage.setItem("verici_bitrate", el("bitrateSel").value);
+    localStorage.setItem("verici_fps", el("fpsSel").value);
+    localStorage.setItem("verici_res", el("resSel").value);
     localStorage.setItem("verici_turn_url", el("turnUrl").value.trim());
     localStorage.setItem("verici_turn_user", el("turnUser").value.trim());
     localStorage.setItem("verici_turn_cred", el("turnCred").value.trim());
-    toast("Ayarlar kaydedildi");
+    if (isBroadcasting) {
+      if (localStream) { const vt = localStream.getVideoTracks()[0]; if (vt) { try { vt.contentHint = contentSettings().hint; } catch {} } }
+      peers.forEach(p => applySenderParams(p.pc));
+      toast("Kaydedildi ve yayına uygulandı");
+    } else toast("Ayarlar kaydedildi");
   } catch { toast("Kaydedilemedi"); }
 }
 
@@ -1089,7 +1149,7 @@ async function goLive(code){
   onDisconnect(ref(db, "users/" + currentUser.uid + "/rooms/" + code + "/live")).set(false);
   voiceStream = new MediaStream(); el("voiceSink").srcObject = voiceStream;
   el("previewVideo").srcObject = localStream;
-  const vTrack = localStream.getVideoTracks()[0]; if (vTrack) vTrack.onended = () => stopBroadcast();
+  const vTrack = localStream.getVideoTracks()[0]; if (vTrack) { vTrack.onended = () => stopBroadcast(); try { vTrack.contentHint = contentSettings().hint; } catch {} }
   const viewersRef = ref(db, "rooms/" + code + "/viewers");
   bcUnsubs.push(onChildAdded(viewersRef, (s) => handleNewViewer(s.key)));
   bcUnsubs.push(onChildRemoved(viewersRef, (s) => teardownViewer(s.key)));
@@ -1115,7 +1175,7 @@ async function handleNewViewer(viewerId){
     if (ans && !pc.currentRemoteDescription) { try { await pc.setRemoteDescription(ans); await flushIce(pc); } catch (e) { console.warn(e); } }
   });
   const unsubCand = onChildAdded(ref(db, base + "/viewerCandidates"), (snap) => addRemoteIce(pc, snap.val()));
-  try { const offer = await pc.createOffer(); await pc.setLocalDescription(offer); await set(ref(db, base + "/offer"), { type: offer.type, sdp: offer.sdp }); } catch (e) { console.warn(e); }
+  try { const offer = await pc.createOffer(); await pc.setLocalDescription(offer); await applySenderParams(pc); await set(ref(db, base + "/offer"), { type: offer.type, sdp: offer.sdp }); } catch (e) { console.warn(e); }
   peers.set(viewerId, { pc, unsubs: [unsubAnswer, unsubCand], vtracks });
   updateViewerCount();
 }
